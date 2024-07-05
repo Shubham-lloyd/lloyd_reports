@@ -1,0 +1,858 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="lyd_ns_vs_sr_collection_os_sub" pageWidth="2550" pageHeight="1190" orientation="Landscape" columnWidth="2550" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" isIgnorePagination="true" uuid="cdf24cb9-0848-4c68-9a2e-611224faee63">
+	<property name="ireport.zoom" value="1.5"/>
+	<property name="ireport.x" value="0"/>
+	<property name="ireport.y" value="0"/>
+	<property name="ireport.jasperserver.url" value="http://3.7.120.169:8080/LLOYD_BISERVER/"/>
+	<property name="ireport.jasperserver.user" value="jasperadmin"/>
+	<property name="ireport.jasperserver.report.resource" value="/reports/003_MIS_Reports/LYD_NetSales_Vs_SalesReturn_Collection_OS_files/lyd_ns_vs_sr_collection_os_sub.jrxml"/>
+	<property name="ireport.jasperserver.reportUnit" value="/reports/003_MIS_Reports/LYD_NetSales_Vs_SalesReturn_Collection_OS"/>
+	<parameter name="lhr_site" class="java.lang.String"/>
+	<parameter name="lhr_dt" class="java.util.Date"/>
+	<queryString>
+		<![CDATA[select
+*
+from (
+WITH tab2
+AS (
+	SELECT a.site_code
+		,a.tran_date
+				 -- ,C.Item_Ser
+   ,siteitem.Item_Ser
+
+		,a.cust_code__bil AS cust_code__bil
+		,a.cust_code AS cust_code
+        ,D.Order_Type
+        ,b.Item_Code
+                ,nvl(FN_RGET_TAX_DET('S-INV', B.INVOICE_ID, cast(B.line_no AS CHAR(3)), 'CGST_TAX', 'A'), 0) as Gross_Sales
+         ,0 as Discount
+        ,0 as Off_Discount
+		,0 AS sales_return
+
+	FROM invoice a
+		,invoice_trace b
+		,item c
+
+        ,Sorder D
+,siteitem
+
+	WHERE a.invoice_id = b.invoice_id
+		AND c.item_code = b.item_code
+and siteitem.site_code = A.site_code
+and siteitem.item_code = C.Item_Code
+        And D.Sale_Order = A.Sale_Order
+
+		AND a.confirmed = 'Y'
+
+
+		AND a.tran_date >= last_day(add_months(TO_DATE($P{lhr_dt}), - 13)) + 1
+		AND a.tran_date <= (add_months(TO_DATE($P{lhr_dt}), - 12))
+        and a.site_code like 'S%'
+        and a.site_code in ('$P!{lhr_site}')
+
+		AND NOT EXISTS (SELECT 1 FROM sreturn sr WHERE sr.invoice_id = a.invoice_id AND confirmed = 'Y' AND tran_date <= (add_months(TO_DATE($P{lhr_dt}), - 12)) AND tran_type = 'IC')
+
+
+	UNION ALL
+
+	SELECT a.site_code
+		,a.tran_date
+		 -- ,C.Item_Ser
+   ,siteitem.Item_Ser
+
+		,a.cust_code__bill AS cust_code__bil
+		,a.cust_code AS cust_code
+        ,'SR' Order_Type
+        ,b.Item_Code
+		,0 AS gross_sales
+        ,0 AS Discount
+        ,0 AS Off_Discount
+,case when nvl(FN_RGET_TAX_DET('S-RET', B.Tran_Id, cast(B.line_no AS CHAR(3)), 'CGST_TAX', 'A'), 0) > 0 then nvl(FN_RGET_TAX_DET('S-RET', B.Tran_Id, cast(B.line_no AS CHAR(3)), 'CGST_TAX', 'A'), 0)
+        else ((B.Rate__Stduom * B.Quantity__StdUom) - (nvl((((NVL(B.QUANTITY, 0) * NVL(B.RATE__STDUOM, 0) * NVL(A.EXCH_RATE, 0)) * nvl(B.DISCOUNT, 0)) / 100), 0) + nvl(FN_RGET_TAX_DET('S-RET', B.Tran_Id, cast(B.line_no AS CHAR(3)), 'DISC_GST', 'T') * (- 1), 0)) )
+        end  AS sales_return
+	FROM sreturn a
+		,sreturndet b
+		,item c
+,siteitem
+	WHERE a.tran_id = b.tran_id
+		AND c.item_code = b.item_code
+and siteitem.site_code = A.site_code
+and siteitem.item_code = C.Item_Code
+		AND a.confirmed = 'Y'
+
+		AND a.tran_date >= last_day(add_months(TO_DATE($P{lhr_dt}), - 13)) + 1
+		AND a.tran_date <= (add_months(TO_DATE($P{lhr_dt}), - 12))
+
+		AND tran_type <> 'IC'
+		and a.site_code like 'S%'
+        and a.site_code in ('$P!{lhr_site}')
+    )
+	,tab3
+AS (
+	SELECT tab2.site_code site
+		,s.udf4 AS cfa_code
+		,s.udf5 AS cfa_name
+		,div.item_ser division_code
+		,div.descr AS division
+		,tab2.tran_date AS tran_date
+		,s.state_code AS state_code
+		,(CASE WHEN div.item_ser = 'TR01 ' THEN (tab2.gross_sales-tab2.Discount) ELSE 0 END) AS gross_sales_tr01
+		,(CASE WHEN div.item_ser = 'TR01 ' THEN tab2.sales_return ELSE 0 END ) AS sales_return_tr01
+        ,(Case when div.Item_Ser = 'TR01 ' THEN (Tab2.Gross_Sales-
+            (tab2.sales_return)) else 0 end) as PRI_NET_SALES_TR01
+		,(case
+              when (div.item_ser = 'TR01 ' And 'DS' = Tab2.Order_Type and  exists (select 1 from pricelist p where price_list = 'TRDD' and p.item_code = tab2.Item_Code))
+                then 0
+            when (div.item_ser = 'TR01 ' And 'NE' <> Tab2.Order_Type )
+                then nvl(Tab2.Discount,0)
+            else 0
+                    end) as DISCOUNT_1_TR01
+        ,((Case when div.item_ser = 'TR01 ' then
+                nvl(Tab2.Discount,0) + nvl(Off_Discount,0)
+               else 0 end)) as COMPNY_DISC_TR01
+
+		,(CASE WHEN div.item_ser = 'TR02 ' THEN (tab2.gross_sales-tab2.Discount) ELSE 0 END) AS gross_sales_tr02
+		,(CASE WHEN div.item_ser = 'TR02 ' THEN tab2.sales_return ELSE 0 END ) AS sales_return_tr02
+        ,(Case when div.Item_Ser = 'TR02 ' THEN (Tab2.Gross_Sales-
+            (tab2.sales_return)) else 0 end) as PRI_NET_SALES_TR02
+		,(case
+              when (div.item_ser = 'TR02 ' And 'DS' = Tab2.Order_Type and  exists (select 1 from pricelist p where price_list = 'TRDD' and p.item_code = tab2.Item_Code))
+                then 0
+            when (div.item_ser = 'TR02 ' And 'NE' <> Tab2.Order_Type )
+                then nvl(Tab2.Discount,0)
+          else 0
+                    end) as DISCOUNT_1_TR02
+        ,((Case when div.item_ser = 'TR02 ' then
+                    nvl(Tab2.Discount,0) + nvl(Off_Discount,0)
+               else 0 end)) as COMPNY_DISC_TR02
+
+		,(CASE WHEN div.item_ser = 'TR03 ' THEN (tab2.gross_sales-tab2.Discount) ELSE 0 END) AS gross_sales_tr03
+		,(CASE WHEN div.item_ser = 'TR03 ' THEN tab2.sales_return ELSE 0 END ) AS sales_return_tr03
+        ,(Case when div.Item_Ser = 'TR03 ' THEN (Tab2.Gross_Sales-
+            (tab2.sales_return)) else 0 end) as PRI_NET_SALES_TR03
+        ,(case
+          when (div.item_ser = 'TR03 ' And 'DS' = Tab2.Order_Type and  exists (select 1 from pricelist p where price_list = 'TRDD' and p.item_code = tab2.Item_Code))
+            then 0
+        when (div.item_ser = 'TR03 ' And 'NE' <> Tab2.Order_Type )
+            then nvl(Tab2.Discount,0)
+        else 0
+                end) as DISCOUNT_1_TR03
+        ,((Case when div.item_ser = 'TR03 ' then
+            nvl(Tab2.Discount,0) + nvl(Off_Discount,0)
+           else 0 end)) as COMPNY_DISC_TR03
+
+		,(CASE WHEN div.item_ser = 'TR04 ' THEN (tab2.gross_sales-tab2.Discount) ELSE 0 END) AS gross_sales_tr04
+		,(CASE WHEN div.item_ser = 'TR04 ' THEN tab2.sales_return ELSE 0 END ) AS sales_return_tr04
+        ,(Case when div.Item_Ser = 'TR04 ' THEN (Tab2.Gross_Sales-
+            (tab2.sales_return)) else 0 end) as PRI_NET_SALES_TR04
+		,(case
+          when (div.item_ser = 'TR04 ' And 'DS' = Tab2.Order_Type and  exists (select 1 from pricelist p where price_list = 'TRDD' and p.item_code = tab2.Item_Code))
+            then 0
+        when (div.item_ser = 'TR04 ' And 'NE' <> Tab2.Order_Type )
+            then nvl(Tab2.Discount,0)
+        else 0
+                end) as DISCOUNT_1_TR04
+        ,((Case when div.item_ser = 'TR04 ' then
+            nvl(Tab2.Discount,0) + nvl(Off_Discount,0)
+           else 0 end)) as COMPNY_DISC_TR04
+
+        ,(CASE WHEN div.item_ser = 'TR05 ' THEN (tab2.gross_sales-tab2.Discount) ELSE 0 END) AS gross_sales_tr05
+		,(CASE WHEN div.item_ser = 'TR05 ' THEN tab2.sales_return ELSE 0 END ) AS sales_return_tr05
+        ,(Case when div.Item_Ser = 'TR05 ' THEN (Tab2.Gross_Sales-
+            (tab2.sales_return)) else 0 end) as PRI_NET_SALES_TR05
+		,(case
+          when (div.item_ser = 'TR05 ' And 'DS' = Tab2.Order_Type and  exists (select 1 from pricelist p where price_list = 'TRDD' and p.item_code = tab2.Item_Code))
+            then 0
+        when (div.item_ser = 'TR05 ' And 'NE' <> Tab2.Order_Type )
+            then nvl(Tab2.Discount,0)
+        else 0
+                end) as DISCOUNT_1_TR05
+        ,((Case when div.item_ser = 'TR05 ' then
+                    nvl(Tab2.Discount,0) + nvl(Off_Discount,0)
+                   else 0 end)) as COMPNY_DISC_TR05
+
+        ,(CASE WHEN div.item_ser = 'TR06 ' THEN (tab2.gross_sales-tab2.Discount) ELSE 0 END) AS gross_sales_TR06
+		,(CASE WHEN div.item_ser = 'TR06 ' THEN tab2.sales_return ELSE 0 END ) AS sales_return_TR06
+        ,(Case when div.Item_Ser = 'TR06 ' THEN (Tab2.Gross_Sales-
+            (tab2.sales_return)) else 0 end) as PRI_NET_SALES_TR06
+		,(case
+          when (div.item_ser = 'TR06 ' And 'DS' = Tab2.Order_Type and  exists (select 1 from pricelist p where price_list = 'TRDD' and p.item_code = tab2.Item_Code))
+            then 0
+        when (div.item_ser = 'TR06 ' And 'NE' <> Tab2.Order_Type )
+            then nvl(Tab2.Discount,0)
+        else 0
+                end) as DISCOUNT_1_TR06
+        ,((Case when div.item_ser = 'TR06 ' then
+                    nvl(Tab2.Discount,0) + nvl(Off_Discount,0)
+                   else 0 end)) as COMPNY_DISC_TR06
+
+	FROM tab2
+        ,site s
+		,itemser div
+		,customer stk
+
+	WHERE s.site_code = tab2.site_code
+		AND div.item_ser = tab2.item_ser
+		AND stk.cust_code = tab2.cust_code__bil
+		--AND STK.fax IS NULL
+	)
+SELECT state_code state_code
+	,Round((gross_sales_tr01/100000),2) gross_sales_tr01
+	,Round((sales_return_tr01/100000),2) sales_return_tr01
+	,Round((PRI_NET_SALES_TR01/100000),2) PRI_NET_SALES_TR01
+	,Round((gross_sales_tr02/100000),2) gross_sales_tr02
+	,Round((sales_return_tr02/100000),2) sales_return_tr02
+	,Round((PRI_NET_SALES_TR02/100000),2) PRI_NET_SALES_TR02
+	,Round((gross_sales_tr03/100000),2) gross_sales_tr03
+	,Round((sales_return_tr03/100000),2) sales_return_tr03
+	,Round((PRI_NET_SALES_TR03/100000),2) PRI_NET_SALES_TR03
+	,Round((gross_sales_tr04/100000),2) gross_sales_tr04
+	,Round((sales_return_tr04/100000),2) sales_return_tr04
+	,Round((PRI_NET_SALES_TR04/100000),2) PRI_NET_SALES_TR04
+    ,Round((gross_sales_tr05/100000),2) gross_sales_tr05
+	,Round((sales_return_tr05/100000),2) sales_return_tr05
+	,Round((PRI_NET_SALES_TR05/100000),2) PRI_NET_SALES_TR05
+    ,Round((gross_sales_tr06/100000),2) gross_sales_tr06
+	,Round((sales_return_tr06/100000),2) sales_return_tr06
+	,Round((PRI_NET_SALES_TR06/100000),2) PRI_NET_SALES_TR06
+	,Round((chq_dep_val/100000),2) chq_dep_val
+	,Round((tot_dep_val/100000),2) tot_dep_val
+	,Round((tot_rcp_val/100000),2) tot_rcp_val
+	,0 os_amt
+FROM (
+		SELECT TO_CHAR(add_months(TO_DATE($P{lhr_dt}), - 12), 'ddth Mon-YY') state_code
+		,SUM(gross_sales_tr01) AS gross_sales_tr01
+		,SUM(sales_return_tr01) AS sales_return_tr01
+		,SUM(PRI_NET_SALES_TR01) AS PRI_NET_SALES_TR01
+		,SUM(gross_sales_tr02) AS gross_sales_tr02
+		,SUM(sales_return_tr02) AS sales_return_tr02
+		,SUM(PRI_NET_SALES_TR02) AS PRI_NET_SALES_TR02
+		,SUM(gross_sales_tr03) AS gross_sales_tr03
+		,SUM(sales_return_tr03) AS sales_return_tr03
+		,SUM(PRI_NET_SALES_TR03) AS PRI_NET_SALES_TR03
+		,SUM(gross_sales_tr04) AS gross_sales_tr04
+		,SUM(sales_return_tr04) AS sales_return_tr04
+		,SUM(PRI_NET_SALES_TR04) AS PRI_NET_SALES_TR04
+        ,SUM(gross_sales_tr05) AS gross_sales_tr05
+		,SUM(sales_return_tr05) AS sales_return_tr05
+		,SUM(PRI_NET_SALES_TR05) AS PRI_NET_SALES_TR05
+     ,SUM(gross_sales_tr06) AS gross_sales_tr06
+		,SUM(sales_return_tr06) AS sales_return_tr06
+		,SUM(PRI_NET_SALES_TR06) AS PRI_NET_SALES_TR06
+		,SUM(chq_dep_val) AS chq_dep_val
+		,SUM(tot_dep_val) AS tot_dep_val
+		,SUM(tot_rcp_val) AS tot_rcp_val
+		,0 AS os_amt
+	FROM (
+		SELECT gross_sales_tr01 AS gross_sales_tr01
+			,sales_return_tr01 AS sales_return_tr01
+ ,(PRI_NET_SALES_TR01 - (COMPNY_DISC_TR01)) as PRI_NET_SALES_TR01
+			,gross_sales_tr02 AS gross_sales_tr02
+			,sales_return_tr02 AS sales_return_tr02
+ ,(PRI_NET_SALES_TR02 - (COMPNY_DISC_TR02)) as PRI_NET_SALES_TR02
+			,gross_sales_tr03 AS gross_sales_tr03
+			,sales_return_tr03 AS sales_return_tr03
+ ,(PRI_NET_SALES_TR03 - (COMPNY_DISC_TR03)) as PRI_NET_SALES_TR03
+			,gross_sales_tr04 AS gross_sales_tr04
+			,sales_return_tr04 AS sales_return_tr04
+,(PRI_NET_SALES_TR04 - (COMPNY_DISC_TR04)) as PRI_NET_SALES_TR04
+            ,gross_sales_tr05 AS gross_sales_tr05
+			,sales_return_tr05 AS sales_return_tr05
+,(PRI_NET_SALES_TR05 - (COMPNY_DISC_TR05)) as PRI_NET_SALES_TR05
+            ,gross_sales_tr06 AS gross_sales_tr06
+			,sales_return_tr06 AS sales_return_tr06
+,(PRI_NET_SALES_TR06 - (COMPNY_DISC_TR06)) as PRI_NET_SALES_TR06
+			,0 AS chq_dep_val
+			,0 AS tot_dep_val
+			,0 As tot_rcp_val
+			,0 AS os_amt
+		FROM tab3
+		WHERE tran_date >= last_day(add_months(TO_DATE($P{lhr_dt}), - 13)) + 1
+			AND tran_date <= (add_months(TO_DATE($P{lhr_dt}), - 12))
+
+		UNION ALL
+
+		SELECT 0 AS gross_sales_tr01
+			,0 AS sales_return_tr01
+            ,0 as PRI_NET_SALES_TR01
+			,0 AS gross_sales_tr02
+			,0 AS sales_return_tr02
+            ,0 as PRI_NET_SALES_TR02
+			,0 AS gross_sales_tr03
+			,0 AS sales_return_tr03
+            ,0 as PRI_NET_SALES_TR03
+			,0 AS gross_sales_tr04
+			,0 AS sales_return_tr04
+            ,0 as PRI_NET_SALES_TR04
+            ,0 AS gross_sales_tr05
+			,0 AS sales_return_tr05
+            ,0 as PRI_NET_SALES_TR05
+           ,0 AS gross_sales_tr06
+			,0 AS sales_return_tr06
+            ,0 as PRI_NET_SALES_TR06
+			,(CASE WHEN (pr.ref_date = (add_months(TO_DATE($P{lhr_dt}), - 13)) AND NOT EXISTS (SELECT 1 FROM receipt WHERE tran_id = tran_ref_rcp AND confirmed = 'Y')) THEN pr.amount ELSE 0 END) AS chq_dep_val
+			,pr.amount AS tot_dep_val
+			,0 As tot_rcp_val
+			,0 AS os_amt
+		FROM pdc_received pr
+		WHERE pr.STATUS IN ('P')
+			AND (
+				pr.ref_date >= last_day(add_months(TO_DATE($P{lhr_dt}), - 13)) + 1
+				AND pr.ref_date <= (add_months(TO_DATE($P{lhr_dt}), - 12))
+				)
+			--And Not Exists (Select 1 from receipt where tran_id = tran_ref_rcp And Confirmed = 'Y')
+			AND pr.amount <> 0
+			and pr.site_code like 'S%'
+            and pr.site_code in ('$P!{lhr_site}')
+		UNION ALL
+
+		SELECT 0 AS gross_sales_tr01
+			,0 AS sales_return_tr01
+			,0 as PRI_NET_SALES_TR01
+			,0 AS gross_sales_tr02
+			,0 AS sales_return_tr02
+			,0 as PRI_NET_SALES_TR02
+			,0 AS gross_sales_tr03
+			,0 AS sales_return_tr03
+			,0 as PRI_NET_SALES_TR03
+			,0 AS gross_sales_tr04
+			,0 AS sales_return_tr04
+			,0 as PRI_NET_SALES_TR04
+            ,0 AS gross_sales_tr05
+			,0 AS sales_return_tr05
+			,0 as PRI_NET_SALES_TR05
+            ,0 AS gross_sales_tr06
+			,0 AS sales_return_tr06
+			,0 as PRI_NET_SALES_TR06
+			,0 AS chq_dep_val
+			,0 AS tot_dep_val
+			,Net_Amt__BC AS tot_rcp_val
+			,0 AS os_amt
+		FROM Receipt r
+		WHERE Confirmed = 'Y'
+		And Tran_Date >= last_day(add_months(TO_DATE($P{lhr_dt}), - 13)) + 1
+		And Tran_Date <= (add_months(TO_DATE($P{lhr_dt}), - 12))
+		And Not Exists (Select 1 from rcpdishnr rd Where Confirmed = 'Y' And rd.Receipt_No = r.Tran_Id)
+and r.site_code like 'S%'
+        and r.site_code in ('$P!{lhr_site}')
+		) prev_mon
+	GROUP BY TO_CHAR((add_months(TO_DATE($P{lhr_dt}), - 12)), 'ddth Mon-YY')
+	)
+) tab11]]>
+	</queryString>
+	<field name="STATE_CODE" class="java.lang.String"/>
+	<field name="GROSS_SALES_TR01" class="java.math.BigDecimal"/>
+	<field name="SALES_RETURN_TR01" class="java.math.BigDecimal"/>
+	<field name="PRI_NET_SALES_TR01" class="java.math.BigDecimal"/>
+	<field name="GROSS_SALES_TR02" class="java.math.BigDecimal"/>
+	<field name="SALES_RETURN_TR02" class="java.math.BigDecimal"/>
+	<field name="PRI_NET_SALES_TR02" class="java.math.BigDecimal"/>
+	<field name="GROSS_SALES_TR03" class="java.math.BigDecimal"/>
+	<field name="SALES_RETURN_TR03" class="java.math.BigDecimal"/>
+	<field name="PRI_NET_SALES_TR03" class="java.math.BigDecimal"/>
+	<field name="GROSS_SALES_TR04" class="java.math.BigDecimal"/>
+	<field name="SALES_RETURN_TR04" class="java.math.BigDecimal"/>
+	<field name="PRI_NET_SALES_TR04" class="java.math.BigDecimal"/>
+	<field name="GROSS_SALES_TR05" class="java.math.BigDecimal"/>
+	<field name="SALES_RETURN_TR05" class="java.math.BigDecimal"/>
+	<field name="PRI_NET_SALES_TR05" class="java.math.BigDecimal"/>
+	<field name="GROSS_SALES_TR06" class="java.math.BigDecimal"/>
+	<field name="SALES_RETURN_TR06" class="java.math.BigDecimal"/>
+	<field name="PRI_NET_SALES_TR06" class="java.math.BigDecimal"/>
+	<field name="CHQ_DEP_VAL" class="java.math.BigDecimal"/>
+	<field name="TOT_DEP_VAL" class="java.math.BigDecimal"/>
+	<field name="TOT_RCP_VAL" class="java.math.BigDecimal"/>
+	<field name="OS_AMT" class="java.math.BigDecimal"/>
+	<variable name="NET_SALES_TR01" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR01}.subtract( $F{SALES_RETURN_TR01} )]]></variableExpression>
+	</variable>
+	<variable name="NET_SALES_TR02" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR02}.subtract( $F{SALES_RETURN_TR02} )]]></variableExpression>
+	</variable>
+	<variable name="NET_SALES_TR03" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR03}.subtract( $F{SALES_RETURN_TR03} )]]></variableExpression>
+	</variable>
+	<variable name="NET_SALES_TR04" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR04}.subtract( $F{SALES_RETURN_TR04} )]]></variableExpression>
+	</variable>
+	<variable name="TOT_GROSS_SALES" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR01}
+.add( $F{GROSS_SALES_TR02} )
+.add( $F{GROSS_SALES_TR03} )
+.add( $F{GROSS_SALES_TR04} )
+.add( $F{GROSS_SALES_TR05} )
+.add( $F{GROSS_SALES_TR06} )]]></variableExpression>
+	</variable>
+	<variable name="TOT_SALES_RETURN" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{SALES_RETURN_TR01}
+.add( $F{SALES_RETURN_TR02} )
+.add( $F{SALES_RETURN_TR03} )
+.add( $F{SALES_RETURN_TR04} )
+.add( $F{SALES_RETURN_TR05} )
+.add( $F{SALES_RETURN_TR06} )]]></variableExpression>
+	</variable>
+	<variable name="TOT_NET_SALES" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$V{NET_SALES_TR01}
+.add( $V{NET_SALES_TR02} )
+.add( $V{NET_SALES_TR03} )
+.add( $V{NET_SALES_TR04} )
+.add( $V{NET_SALES_TR05} )
+.add( $V{NET_SALES_TR06} )]]></variableExpression>
+	</variable>
+	<variable name="TOT_PRI_NET_SALES" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{PRI_NET_SALES_TR01}
+.add( $F{PRI_NET_SALES_TR02} )
+.add( $F{PRI_NET_SALES_TR03} )
+.add( $F{PRI_NET_SALES_TR04} )
+.add( $F{PRI_NET_SALES_TR05} )
+.add( $F{PRI_NET_SALES_TR06} )]]></variableExpression>
+	</variable>
+	<variable name="NET_SALES_TR05" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR05}.subtract( $F{SALES_RETURN_TR05} )]]></variableExpression>
+	</variable>
+	<variable name="NET_SALES_TR06" class="java.math.BigDecimal" resetType="None">
+		<variableExpression><![CDATA[$F{GROSS_SALES_TR06}.subtract( $F{SALES_RETURN_TR06} )]]></variableExpression>
+	</variable>
+	<detail>
+		<band height="15" splitType="Stretch">
+			<staticText>
+				<reportElement mode="Opaque" x="0" y="0" width="2485" height="15" backcolor="#F3F3F3" uuid="090a4741-0445-4456-892c-68aea56b74b2">
+					<printWhenExpression><![CDATA[new Boolean($V{REPORT_COUNT}.intValue() % 2 == 0?true:false)]]></printWhenExpression>
+				</reportElement>
+				<textElement>
+					<font size="8"/>
+				</textElement>
+				<text><![CDATA[]]></text>
+			</staticText>
+			<textField>
+				<reportElement x="0" y="0" width="70" height="15" uuid="e540fd8a-0608-42f0-abb8-c610b5d0b82e"/>
+				<box>
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Center" verticalAlignment="Middle">
+					<font size="9" isBold="true"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{STATE_CODE}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="70" y="0" width="80" height="15" uuid="0f998c7c-ca0b-41b7-aaf6-5552e8ba13b2"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{GROSS_SALES_TR01}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="150" y="0" width="75" height="15" uuid="dba6b9c5-0dc7-4300-a52c-c486fe9c463b"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SALES_RETURN_TR01}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="225" y="0" width="65" height="15" uuid="07e8bd42-f5f3-4322-a4aa-aff9047b76dd"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{NET_SALES_TR01}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="290" y="0" width="75" height="15" uuid="67c3613f-44b6-4d88-acda-de4ee0df8950"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRI_NET_SALES_TR01}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="365" y="0" width="75" height="15" uuid="601aa074-7807-4a9e-9a30-48597711726a"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{GROSS_SALES_TR02}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="440" y="0" width="75" height="15" uuid="2277fc53-969e-4527-a7a8-8b45e55b7c5e"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SALES_RETURN_TR02}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="515" y="0" width="75" height="15" uuid="904f4f77-a686-4ef4-b596-fdd60b9e9337"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{NET_SALES_TR02}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="590" y="0" width="74" height="15" uuid="e4f215ca-51d8-4d9d-956d-08c3965c410b"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRI_NET_SALES_TR02}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="664" y="0" width="80" height="15" uuid="1d81d5a5-a4c1-4946-85ad-4ee36a26a868"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{GROSS_SALES_TR03}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="744" y="0" width="65" height="15" uuid="09d66ee9-6566-432d-a149-71104ae9b2ee"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SALES_RETURN_TR03}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="809" y="0" width="62" height="15" uuid="b1db0042-b8cd-44c6-9e45-7fc6f193a06d"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{NET_SALES_TR03}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="871" y="0" width="90" height="15" uuid="8350b92e-a6e2-481c-8468-5874dce4f80c"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRI_NET_SALES_TR03}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="961" y="0" width="80" height="15" uuid="af2d8674-2d60-40de-aeef-0bea83c31af3"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{GROSS_SALES_TR04}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1041" y="0" width="65" height="15" uuid="e94f5826-07a1-4ebb-87b8-b3338417393f"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SALES_RETURN_TR04}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1106" y="0" width="76" height="15" uuid="5956959d-5721-4fcb-9dff-b1b5ae70831b"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{NET_SALES_TR04}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1182" y="0" width="76" height="15" uuid="1297901e-4e19-4d32-9ab3-ec075c547fe3"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRI_NET_SALES_TR04}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1852" y="0" width="80" height="15" uuid="44b445dc-619e-4a58-a520-498f475f974c"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOT_GROSS_SALES}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1932" y="0" width="65" height="15" uuid="b0eff853-7df9-4ff2-ac6c-3dc19cd28396"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOT_SALES_RETURN}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1997" y="0" width="76" height="15" uuid="0a05b0f2-7b0c-459a-a1a3-4746ebceeaef"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOT_NET_SALES}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="2073" y="0" width="76" height="15" uuid="e16a8972-fd06-4ae3-bf8b-f6811bb6c78d"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9" isBold="false"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{TOT_PRI_NET_SALES}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="2149" y="0" width="80" height="15" uuid="500ebff4-e7e7-4699-961e-5fa7900f89e9"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{CHQ_DEP_VAL}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="2229" y="0" width="80" height="15" uuid="5f5f51f8-4978-47f0-aa1d-7df6ee42633b"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{TOT_DEP_VAL}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="2389" y="0" width="96" height="15" uuid="4e6b5ae7-de86-42b0-847a-b2e60ddd13ec"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{OS_AMT}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="2309" y="0" width="80" height="15" uuid="72419000-dde9-4938-a5c4-ee29ec5a142e"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{TOT_RCP_VAL}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1403" y="0" width="76" height="15" uuid="c3d6662a-67b2-447f-9999-3d8a444998c6"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{NET_SALES_TR05}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1479" y="0" width="76" height="15" uuid="978e4279-6d2b-463b-add5-de31a3966ab5"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRI_NET_SALES_TR05}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1258" y="0" width="80" height="15" uuid="676c859a-b681-4230-a925-87cc39c85e50"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{GROSS_SALES_TR05}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1338" y="0" width="65" height="15" uuid="28e9962b-b2cc-449a-a24f-e9d79ffc3a85"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SALES_RETURN_TR05}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1555" y="0" width="80" height="15" uuid="3d1aac4a-6c16-405e-b390-20c7f2cc8210"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{GROSS_SALES_TR06}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1635" y="0" width="65" height="15" uuid="9dbc5ff6-be8d-4d9f-b8aa-346a00376878"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{SALES_RETURN_TR06}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1700" y="0" width="76" height="15" uuid="6dd5da16-709d-476e-ba9f-6a200a10edaf"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$V{NET_SALES_TR06}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="1776" y="0" width="76" height="15" uuid="a1cc574f-92fa-4b36-ab77-438b6efcf8a6"/>
+				<box rightPadding="2">
+					<topPen lineWidth="0.25"/>
+					<leftPen lineWidth="0.25"/>
+					<bottomPen lineWidth="0.25"/>
+					<rightPen lineWidth="0.25"/>
+				</box>
+				<textElement textAlignment="Right" verticalAlignment="Middle">
+					<font size="9"/>
+				</textElement>
+				<textFieldExpression><![CDATA[$F{PRI_NET_SALES_TR06}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+</jasperReport>
