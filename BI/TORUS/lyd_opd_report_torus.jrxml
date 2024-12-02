@@ -1,0 +1,1058 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="lyd_opd_report_torus" pageWidth="4500" pageHeight="595" orientation="Landscape" columnWidth="4460" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" isIgnorePagination="true" uuid="f05c882c-f122-44ed-b24c-99fa473f924e">
+	<property name="ireport.zoom" value="1.0"/>
+	<property name="ireport.x" value="72"/>
+	<property name="ireport.y" value="0"/>
+	<style name="Crosstab Data Text" hAlign="Center"/>
+	<queryString>
+		<![CDATA[select *
+from
+(
+with cte1 as
+(
+
+select
+cast(extract(month from p.plandate)as int) as month
+,h.zone
+,h.region
+,p.hq
+,p.id as plan_id
+,p.createdby as BH_code
+,h.emp_name as BH_Name
+,h.rep_code as mgr_code
+,h.rep_name as mgr_name
+,h.rep_designation as mgr_desig
+,h.designation as created_by_designation
+,p.dr_code
+,dr.dr_name
+,dr.qualification
+--,drm.dr_type
+,p.plandate
+,s.status
+
+
+
+from opd.tbl_plan p
+
+join public.tbl_emp_master e on e.emplcode = p.createdby
+join opd.tbl_statusmaster s on s.statuscode = p.statuscode
+join public.tbl_emp_hierarchy h on h.emp_code = p.createdby
+join public.tbl_docter_master dr on p.dr_code = dr.dr_code and H.division = dr.division
+--join opd.tbl_doctor_masters drm on dr.dr_code = drm.doctor_code and dr.division = drm.division
+
+
+
+where p.plantype = 'OPD'
+and e.division = 'TORUS'
+--and drm.dr_type in ('BDD','BCD','NBCD')
+and plandate >= (date_trunc('month',current_date) - interval '3' month) ::date
+
+)
+
+--select * from cte1;
+
+,cte2 as
+(
+select
+cte1.month
+,cte1.zone
+,cte1.region
+,cte1.hq
+,cte1.plan_id
+,cte1.BH_code
+,cte1.BH_Name
+,cte1.mgr_code
+,cte1.mgr_name
+,cte1.mgr_desig
+,cte1.created_by_designation
+,cte1.dr_code
+,cte1.dr_name
+,cte1.qualification
+--,cte1.dr_type
+,cte1.plandate
+,cte1.status
+
+,sum(coalesce(tp.isliverxs,0)) as prescriptions
+from cte1
+left join opd.tbl_patient tp on tp.planid = cte1.plan_id
+group by
+cte1.month
+,cte1.zone
+,cte1.region
+,cte1.hq
+,cte1.plan_id
+,cte1.BH_code
+,cte1.BH_Name
+,cte1.mgr_code
+,cte1.mgr_name
+,cte1.mgr_desig
+,cte1.created_by_designation
+,cte1.dr_code
+,cte1.dr_name
+,cte1.qualification
+--,cte1.dr_type
+,cte1.plandate
+,cte1.status
+)
+
+
+,cte3  as
+(
+Select
+tp.planid
+,tp.id
+,b.sh_descr
+,count(distinct b.sh_descr) as prod
+from opd.tbl_patient tp
+join (select distinct sh_descr from opd.tbl_productmaster) b
+on POSITION((','||trim(b.sh_descr)||',') IN (','||trim(tp.products)||',')) > 0
+
+join cte2 on cte2.plan_id=tp.planid
+
+group by
+tp.planid
+,tp.id
+,b.sh_descr
+)
+
+
+,cte4 as
+(
+select
+cte3.planid
+,cte3.sh_descr as Product
+,sum(cte3.prod) as no_of_prod
+from cte3
+group by
+	cte3.planid
+	,cte3.sh_descr
+)
+
+
+,cte5 as
+(
+select
+cte2.month
+,cte2.zone
+,cte2.region
+,cte2.hq
+,cte2.plan_id
+,cte2.BH_code
+,cte2.BH_Name
+,cte2.mgr_code
+,cte2.mgr_name
+,cte2.mgr_desig
+,cte2.created_by_designation
+,cte2.dr_code
+,cte2.dr_name
+,cte2.qualification
+--,cte2.dr_type
+,cte2.plandate
+,cte2.status
+,sum(cte2.prescriptions) as prescriptions
+,cte4.Product
+,coalesce(sum(cte4.no_of_prod),0) as no_of_prod
+from cte2 left join cte4 on cte2.plan_id = cte4.planid
+group by
+cte2.month
+,cte2.zone
+,cte2.region
+,cte2.hq
+,cte2.plan_id
+,cte2.BH_code
+,cte2.BH_Name
+,cte2.mgr_code
+,cte2.mgr_name
+,cte2.mgr_desig
+,cte2.created_by_designation
+,cte2.dr_code
+,cte2.dr_name
+,cte2.qualification
+--,cte2.dr_type
+,cte2.plandate
+,cte2.status
+,cte4.Product
+)
+
+--select * from cte5;
+
+select cte5.month
+,cte5.zone
+,cte5.region
+,cte5.hq
+,cte5.plan_id
+,cte5.BH_code
+,cte5.BH_Name
+,cte5.mgr_code
+,cte5.mgr_name
+,cte5.mgr_desig
+,cte5.created_by_designation
+,cte5.dr_code
+,cte5.dr_name
+,cte5.qualification
+--,cte5.dr_type
+,cte5.plandate
+,cte5.status
+,cte5.prescriptions
+,cte5.Product
+,coalesce(('No of '|| trim(cte5.Product) || ' Group Live prescription uploaded'),'No Rxs') as product_name
+,cte5.no_of_prod
+from cte5
+)final]]>
+	</queryString>
+	<field name="month" class="java.lang.Integer"/>
+	<field name="zone" class="java.lang.String"/>
+	<field name="region" class="java.lang.String"/>
+	<field name="hq" class="java.lang.String"/>
+	<field name="plan_id" class="java.lang.Integer"/>
+	<field name="bh_code" class="java.lang.String"/>
+	<field name="bh_name" class="java.lang.String"/>
+	<field name="mgr_code" class="java.lang.String"/>
+	<field name="mgr_name" class="java.lang.String"/>
+	<field name="mgr_desig" class="java.lang.String"/>
+	<field name="created_by_designation" class="java.lang.String"/>
+	<field name="dr_code" class="java.lang.String"/>
+	<field name="dr_name" class="java.lang.String"/>
+	<field name="qualification" class="java.lang.String"/>
+	<field name="plandate" class="java.sql.Date"/>
+	<field name="status" class="java.lang.String"/>
+	<field name="prescriptions" class="java.math.BigDecimal"/>
+	<field name="product" class="java.lang.String"/>
+	<field name="product_name" class="java.lang.String"/>
+	<field name="no_of_prod" class="java.math.BigDecimal"/>
+	<sortField name="month"/>
+	<sortField name="product_name"/>
+	<variable name="data_row1" class="java.lang.String">
+		<variableExpression><![CDATA[$F{month}+$F{bh_code}+$F{mgr_code}+$F{dr_code}+$F{plandate}+$F{status}+$F{prescriptions}]]></variableExpression>
+	</variable>
+	<summary>
+		<band height="120" splitType="Stretch">
+			<crosstab>
+				<reportElement x="0" y="0" width="4460" height="120" uuid="c03e0dbc-dc0b-4eab-9a13-6091749f7531"/>
+				<crosstabHeaderCell>
+					<cellContents>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="0" y="0" width="50" height="30" backcolor="#99CCFF" uuid="59f510e6-d5ba-4692-b3ed-2c2b9bf0a200"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Month]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="50" y="0" width="120" height="30" backcolor="#99CCFF" uuid="fb13d508-34f5-405e-8467-f06d21249da0"/>
+							<box leftPadding="3">
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement textAlignment="Left" verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Zone]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="170" y="0" width="120" height="30" backcolor="#99CCFF" uuid="ec5aa2a1-5d22-4f7e-9e32-58983aa5060d"/>
+							<box leftPadding="3">
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement textAlignment="Left" verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Region]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="290" y="0" width="120" height="30" backcolor="#99CCFF" uuid="84d0509d-5bf6-4d52-a000-3c97f382d4c2"/>
+							<box leftPadding="3">
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement textAlignment="Left" verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[HQ]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="410" y="0" width="100" height="30" backcolor="#99CCFF" uuid="d7f3ee3d-32de-4e01-9a32-ea97929e8d3f"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[BH CODE]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="510" y="0" width="200" height="30" backcolor="#99CCFF" uuid="e84e90f6-0c56-4276-9399-ddc12e5b632b"/>
+							<box leftPadding="3">
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement textAlignment="Left" verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[BH NAME]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="710" y="0" width="100" height="30" backcolor="#99CCFF" uuid="acb11c31-71c6-4be0-910e-3521686fe2ab"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Mgr Code]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="810" y="0" width="200" height="30" backcolor="#99CCFF" uuid="c4cac9f8-9abd-4b9d-9d44-c1c5db161ff9"/>
+							<box leftPadding="3">
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement textAlignment="Left" verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Mgr Name]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1010" y="0" width="100" height="30" backcolor="#99CCFF" uuid="0af2bfc8-04cb-4aee-9ca1-66b7f83a5ae0"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Mgr Designation]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1110" y="0" width="100" height="30" backcolor="#99CCFF" uuid="c4f94707-f24e-4846-a522-9884933efd3e"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Created by Designation]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1210" y="0" width="100" height="30" backcolor="#99CCFF" uuid="e8150bdd-807a-4803-8132-8e33dfbc7c84"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Dr Code]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1310" y="0" width="200" height="30" backcolor="#99CCFF" uuid="4d056904-e3e3-4fcc-b0da-ca5d78ec2924"/>
+							<box leftPadding="3">
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement textAlignment="Left" verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Dr Name]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1510" y="0" width="100" height="30" backcolor="#99CCFF" uuid="cc6e088d-1868-4dce-9b30-092476fb1ba9"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Qualification]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1610" y="0" width="100" height="30" backcolor="#99CCFF" uuid="fbdc4568-7b83-4fa1-9cd7-c69849e04f8f"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Plan Date]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1710" y="0" width="100" height="30" backcolor="#99CCFF" uuid="f8256f1b-9fd4-4d05-ad05-32aca015f03e"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[Status]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1810" y="0" width="100" height="30" backcolor="#99CCFF" uuid="64e1edee-0e75-46f8-b973-6058a3b480f2"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[]]></text>
+						</staticText>
+						<staticText>
+							<reportElement style="Crosstab Data Text" mode="Opaque" x="1810" y="0" width="100" height="30" backcolor="#99CCFF" uuid="fabb11cc-ad98-467f-858e-5ebcfedf6a8c"/>
+							<box>
+								<pen lineWidth="0.5"/>
+								<topPen lineWidth="0.5"/>
+								<leftPen lineWidth="0.5"/>
+								<bottomPen lineWidth="0.5"/>
+								<rightPen lineWidth="0.5"/>
+							</box>
+							<textElement verticalAlignment="Middle">
+								<font isBold="true"/>
+							</textElement>
+							<text><![CDATA[No of Prescriptions]]></text>
+						</staticText>
+					</cellContents>
+				</crosstabHeaderCell>
+				<rowGroup name="data_row" width="0">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$V{data_row1}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents/>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="month" width="50">
+					<bucket class="java.lang.Integer">
+						<bucketExpression><![CDATA[$F{month}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents backcolor="#F0F8FF" mode="Transparent">
+							<box>
+								<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+							</box>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="50" height="30" uuid="8242672c-f646-4958-bea0-ee42d41a6b89"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{month}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="zone" width="120">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{zone}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents backcolor="#F0F8FF" mode="Transparent">
+							<box>
+								<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+							</box>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="120" height="30" uuid="c1867c26-1e7e-49f8-8aa2-3ecaed4d5389"/>
+								<box leftPadding="3">
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement textAlignment="Left" verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{zone}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="region" width="120">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{region}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" mode="Transparent" x="0" y="0" width="120" height="30" uuid="408746d1-c913-43df-b866-4ff8cc1388f4"/>
+								<box leftPadding="3">
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement textAlignment="Left" verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{region}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="HQ" width="120">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{hq}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="120" height="30" uuid="66fb7db8-a35a-4920-a41e-7f3d742715a1"/>
+								<box leftPadding="3">
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement textAlignment="Left" verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{HQ}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="BH_CODE" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{bh_code}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="bc084aeb-9932-4873-9890-5fb3138ca734"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{BH_CODE}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="bh_name" width="200">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{bh_name}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="200" height="30" uuid="321b5ca7-ec98-42df-8657-f2418544f9b5"/>
+								<box leftPadding="3">
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement textAlignment="Left" verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{bh_name}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="mgr_code" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{mgr_code}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="518aec24-6575-4af1-b192-8e9e01711282"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{mgr_code}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="mgr_name" width="200">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{mgr_name}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="200" height="30" uuid="b484b4bc-e885-42f3-881d-a8fbc037e7d7"/>
+								<box leftPadding="3">
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement textAlignment="Left" verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{mgr_name}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="mgr_desig" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{mgr_desig}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="1cbfddf8-a57b-43ae-89e5-67c4478856fe"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{mgr_desig}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="created_by_designation" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{created_by_designation}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="4eff0679-6c09-4112-96c9-7690cfcc215b"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{created_by_designation}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="dr_code" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{dr_code}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="24dbafaa-feb9-42e9-9d8c-a6daa4ac4440"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{dr_code}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="dr_name" width="200">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{dr_name}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="200" height="30" uuid="1efd20ae-024c-443f-81a7-5e22ac5edf09"/>
+								<box leftPadding="3">
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement textAlignment="Left" verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{dr_name}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="qualification" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{qualification}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="ae92cda1-2bac-4f31-a2b2-f7c5e463105a"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{qualification}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="plandate" width="100">
+					<bucket class="java.util.Date">
+						<bucketExpression><![CDATA[$F{plandate}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField pattern="dd/MM/yyyy">
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="63a49817-3ea6-4abc-bb94-8658059174a1"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{plandate}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="status" width="100">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{status}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="64efd865-f3ec-4aad-a546-24cbe56c5cec"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{status}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<rowGroup name="no_of_live_prescriptions" width="318">
+					<bucket class="java.math.BigDecimal">
+						<bucketExpression><![CDATA[$F{prescriptions}]]></bucketExpression>
+					</bucket>
+					<crosstabRowHeader>
+						<cellContents>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="d12a0ca8-bccd-4e7c-bca7-79691f6628d0"/>
+								<box>
+									<pen lineWidth="0.5"/>
+									<topPen lineWidth="0.5"/>
+									<leftPen lineWidth="0.5"/>
+									<bottomPen lineWidth="0.5"/>
+									<rightPen lineWidth="0.5"/>
+								</box>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{no_of_live_prescriptions}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabRowHeader>
+					<crosstabTotalRowHeader>
+						<cellContents/>
+					</crosstabTotalRowHeader>
+				</rowGroup>
+				<columnGroup name="product_name" height="30">
+					<bucket class="java.lang.String">
+						<bucketExpression><![CDATA[$F{product_name}]]></bucketExpression>
+					</bucket>
+					<crosstabColumnHeader>
+						<cellContents backcolor="#F0F8FF" mode="Opaque">
+							<box>
+								<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+							</box>
+							<textField>
+								<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="ec691f05-f3e5-4396-9b4e-79a109d24eeb"/>
+								<textElement verticalAlignment="Middle"/>
+								<textFieldExpression><![CDATA[$V{product_name}]]></textFieldExpression>
+							</textField>
+						</cellContents>
+					</crosstabColumnHeader>
+					<crosstabTotalColumnHeader>
+						<cellContents/>
+					</crosstabTotalColumnHeader>
+				</columnGroup>
+				<measure name="no_of_prodMeasure" class="java.math.BigDecimal" calculation="Sum">
+					<measureExpression><![CDATA[$F{no_of_prod}]]></measureExpression>
+				</measure>
+				<crosstabCell width="100" height="30">
+					<cellContents>
+						<box>
+							<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+						</box>
+						<textField>
+							<reportElement style="Crosstab Data Text" x="0" y="0" width="100" height="30" uuid="1ccebd28-369b-4415-928a-332e0320afb3"/>
+							<textElement verticalAlignment="Middle"/>
+							<textFieldExpression><![CDATA[$V{no_of_prodMeasure}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell height="25" rowTotalGroup="month">
+					<cellContents backcolor="#005FB3" mode="Opaque">
+						<box>
+							<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+						</box>
+						<textField>
+							<reportElement style="Crosstab Data Text" x="0" y="0" width="50" height="25" forecolor="#FFFFFF" uuid="45d044eb-3762-4409-a98b-edbb4bec51ab"/>
+							<textFieldExpression><![CDATA[$V{no_of_prodMeasure}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell width="50" columnTotalGroup="product_name">
+					<cellContents backcolor="#BFE1FF" mode="Opaque">
+						<box>
+							<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+						</box>
+						<textField>
+							<reportElement style="Crosstab Data Text" x="0" y="0" width="50" height="25" uuid="05bea698-d22c-4158-b188-a4c2c51f0540"/>
+							<textFieldExpression><![CDATA[$V{no_of_prodMeasure}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="month" columnTotalGroup="product_name">
+					<cellContents backcolor="#005FB3" mode="Opaque">
+						<box>
+							<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+						</box>
+						<textField>
+							<reportElement style="Crosstab Data Text" x="0" y="0" width="50" height="25" forecolor="#FFFFFF" uuid="4b1af3e7-11ad-4055-860a-1741dc995f3b"/>
+							<textFieldExpression><![CDATA[$V{no_of_prodMeasure}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell height="25" rowTotalGroup="zone">
+					<cellContents backcolor="#BFE1FF" mode="Opaque">
+						<box>
+							<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+						</box>
+						<textField>
+							<reportElement style="Crosstab Data Text" x="0" y="0" width="50" height="25" uuid="f6aab033-066b-42ab-ae94-4ba2ef215f99"/>
+							<textFieldExpression><![CDATA[$V{no_of_prodMeasure}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="zone" columnTotalGroup="product_name">
+					<cellContents backcolor="#BFE1FF" mode="Opaque">
+						<box>
+							<pen lineWidth="0.5" lineStyle="Solid" lineColor="#000000"/>
+						</box>
+						<textField>
+							<reportElement style="Crosstab Data Text" x="0" y="0" width="50" height="25" uuid="08853e76-df61-4886-9387-5ef4eb8199b3"/>
+							<textFieldExpression><![CDATA[$V{no_of_prodMeasure}]]></textFieldExpression>
+						</textField>
+					</cellContents>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="region">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="region" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="HQ">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="HQ" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="BH_CODE">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="BH_CODE" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="bh_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="bh_name" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="mgr_code">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="mgr_code" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="mgr_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="mgr_name" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="mgr_desig">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="mgr_desig" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="created_by_designation">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="created_by_designation" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="dr_code">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="dr_code" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="dr_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="dr_name" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="qualification">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="qualification" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="plandate">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="plandate" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="status">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="status" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="no_of_live_prescriptions">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="no_of_live_prescriptions" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="data_row">
+					<cellContents/>
+				</crosstabCell>
+				<crosstabCell rowTotalGroup="data_row" columnTotalGroup="product_name">
+					<cellContents/>
+				</crosstabCell>
+			</crosstab>
+		</band>
+	</summary>
+</jasperReport>
